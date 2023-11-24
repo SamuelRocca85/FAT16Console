@@ -69,4 +69,7 @@ public:
   unsigned int bytes16ToInt(byte *bytes);
   unsigned int bytes32ToInt(byte *bytes);
   void print();
+
+  // Metodos para los comandos
+  void listFiles();
 };

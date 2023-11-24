@@ -3,11 +3,11 @@
 #include <iostream>
 #include <sstream>
 
-void lsCallback(FileSystem &fs) {
-  std::cout << "Hola desde ls\n";
+void lsCallback(FileSystem &fs) { fs.listFiles(); }
+void cdCallback(FileSystem &fs) {
+  std::cout << "Hola desde cd\n";
   fs.print();
 }
-void cdCallback(FileSystem &fs) { std::cout << "Hola desde cd\n"; }
 void catCallback(FileSystem &fs) { std::cout << "Hola desde cat\n"; }
 void mkdirCallback(FileSystem &fs) { std::cout << "Hola desde mkdir\n"; }
 

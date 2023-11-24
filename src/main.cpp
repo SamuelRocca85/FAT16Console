@@ -7,7 +7,7 @@ using std::string;
 int main(int argc, char *argv[]) {
 
   if (argc < 2) {
-    std::cout << "Mal uso: ./fatconsole [archivo de imagen fat]";
+    std::cout << "Mal uso: ./fatconsole [archivo de imagen fat]\n";
     return 1;
   }
 

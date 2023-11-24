@@ -19,6 +19,17 @@ FileSystem::~FileSystem() {
   delete[] rootDirectory;
 }
 
+void FileSystem::listFiles() {
+  for (unsigned int i = 0; i < bytes16ToInt(bootSector.rootEntriesMax); i++) {
+    const char firstByte = rootDirectory[i].name[0];
+    if (firstByte == 0xE5 || firstByte == 0x00) {
+      continue;
+    }
+    printf("%s ", rootDirectory[i].name);
+  }
+  printf("\n");
+}
+
 void FileSystem::readBootSector() {
   file->read(reinterpret_cast<char *>(&bootSector), sizeof(bootSector));
 
@@ -56,7 +67,7 @@ bool FileSystem::readSectors(int lba, int sectors, void *buffer) {
   file->seekg(lba * bytes16ToInt(bootSector.bytesPerSector), file->beg);
 
   unsigned int bytesToRead = sectors * bytes16ToInt(bootSector.bytesPerSector);
-  printf("Reading %u bytes...\n", bytesToRead);
+  // printf("Reading %u bytes...\n", bytesToRead);
   file->read(reinterpret_cast<char *>(buffer), bytesToRead);
 
   if (!file) {
