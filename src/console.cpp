@@ -5,11 +5,14 @@
 
 void lsCallback(FileSystem &fs) { fs.listFiles(); }
 void cdCallback(FileSystem &fs) {
-  std::cout << "Hola desde cd\n";
-  fs.print();
+  // std::cout << "Hola desde cd\n";
+  fs.changeDir("PRUEBA     ");
 }
 void catCallback(FileSystem &fs) { std::cout << "Hola desde cat\n"; }
-void mkdirCallback(FileSystem &fs) { std::cout << "Hola desde mkdir\n"; }
+void mkdirCallback(FileSystem &fs) {
+  // std::cout << "Hola desde mkdir\n";
+  fs.makeDir("Hola");
+}
 
 Console::Console(FileSystem &_fs) : fs(_fs) {
   Command ls("ls", lsCallback);

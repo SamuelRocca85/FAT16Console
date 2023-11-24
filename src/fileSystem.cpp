@@ -1,7 +1,9 @@
 #include "FileSystem.h"
+#include <cstdio>
+#include <cstring>
 
 FileSystem::FileSystem(string filename) {
-  file = new ifstream(filename, std::ios::binary);
+  file = new fstream(filename, std::ios::in | std::ios::out | std::ios::binary);
 
   if (!file->is_open()) {
     std::cerr << "Error al abrir el archivo" << std::endl;
@@ -19,17 +21,6 @@ FileSystem::~FileSystem() {
   delete[] rootDirectory;
 }
 
-void FileSystem::listFiles() {
-  for (unsigned int i = 0; i < bytes16ToInt(bootSector.rootEntriesMax); i++) {
-    const char firstByte = rootDirectory[i].name[0];
-    if (firstByte == 0xE5 || firstByte == 0x00) {
-      continue;
-    }
-    printf("%s ", rootDirectory[i].name);
-  }
-  printf("\n");
-}
-
 void FileSystem::readBootSector() {
   file->read(reinterpret_cast<char *>(&bootSector), sizeof(bootSector));
 
@@ -44,6 +35,7 @@ void FileSystem::readFat() {
   unsigned int length = bytes16ToInt(bootSector.sectorsPerFat) *
                         bytes16ToInt(bootSector.bytesPerSector);
   fat = new byte[length];
+  fatLength = length;
   readSectors(bytes16ToInt(bootSector.reservedAreaSectors),
               bytes16ToInt(bootSector.sectorsPerFat), fat);
 }
@@ -58,6 +50,8 @@ void FileSystem::readRootDir() {
   if (size % bytes16ToInt(bootSector.bytesPerSector) > 0) {
     sectors++;
   }
+  rootDirEnd = lba + sectors;
+  printf("Aqui termina el root %u\n", rootDirEnd);
   rootDirectory =
       new DirectoryEntry[sectors * bytes16ToInt(bootSector.bytesPerSector)];
   readSectors(lba, sectors, rootDirectory);
@@ -77,6 +71,70 @@ bool FileSystem::readSectors(int lba, int sectors, void *buffer) {
   }
 
   return true;
+}
+
+unsigned int FileSystem::getFreeCluster() {
+  for (int i = 0; i < fatLength; i++) {
+    if (fat[i] == 0x00) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+unsigned int FileSystem::getClusterSector(unsigned int cluster) {
+  return (cluster - 2) * bootSector.sectorsPerCluster + rootDirEnd;
+}
+
+void FileSystem::listFiles() {
+  for (unsigned int i = 0; i < bytes16ToInt(bootSector.rootEntriesMax); i++) {
+    const char firstByte = rootDirectory[i].name[0];
+    if (firstByte == 0xE5 || firstByte == 0x00) {
+      continue;
+    }
+    if (rootDirectory[i].isDir()) {
+      unsigned int lowBytes = bytes16ToInt(rootDirectory[i].clusterLow);
+      printf("low %u, d: ", lowBytes);
+    } else {
+      printf("f: ");
+    }
+    printf("%s \n", rootDirectory[i].name);
+  }
+  printf("\n");
+}
+
+void FileSystem::changeDir(const char *dirname) {
+  DirectoryEntry *dir = findFile(dirname);
+  if (dir != NULL && dir->isDir()) {
+    // printf("Found dir %s\n", dir->name);
+    unsigned int cluster = bytes16ToInt(dir->clusterLow);
+    unsigned int lba = getClusterSector(cluster);
+    // printf("cd to cluster %u, sector %u\n", cluster, lba);
+    readSectors(lba, bootSector.sectorsPerCluster, rootDirectory);
+  } else {
+    printf("directorio %s no existe\n", dirname);
+  }
+}
+
+void FileSystem::makeDir(string name) {
+  // file->seekp()
+  unsigned int cluster = getFreeCluster();
+  if (cluster != -1) {
+    unsigned int lba = getClusterSector(cluster);
+    printf("Creando dir en cluster %u, sector %u\n", cluster, lba);
+    readSectors(lba, bootSector.sectorsPerCluster, rootDirectory);
+  }
+}
+
+DirectoryEntry *FileSystem::findFile(const char *filename) {
+  for (unsigned int i = 0; i < bytes16ToInt(bootSector.rootEntriesMax); i++) {
+    if (std::memcmp(filename, rootDirectory[i].name, 11) == 0) {
+      // printf("%s == %s\n", filename, rootDirectory[i].name);
+      return &rootDirectory[i];
+    }
+  }
+
+  return NULL;
 }
 
 unsigned int FileSystem::bytesToInt(byte *bytes, size_t size) {

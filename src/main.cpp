@@ -11,8 +11,7 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  string imageName = argv[1];
-  FileSystem fs(imageName);
+  FileSystem fs(argv[1]);
   Console console(fs);
 
   console.start();

@@ -8,7 +8,7 @@
 
 typedef unsigned char byte;
 
-using std::ifstream;
+using std::fstream;
 using std::string;
 
 struct BootSector {
@@ -48,6 +48,8 @@ struct DirectoryEntry {
   byte modifiedDate[2];
   byte clusterLow[2];
   byte size[4];
+
+  bool isDir() { return (attributes & 0x10) != 0; }
 };
 
 class FileSystem {
@@ -55,8 +57,10 @@ class FileSystem {
 private:
   BootSector bootSector;
   DirectoryEntry *rootDirectory;
-  ifstream *file;
+  fstream *file;
   byte *fat;
+  unsigned int fatLength;
+  unsigned int rootDirEnd;
 
 public:
   FileSystem(string file);
@@ -65,6 +69,12 @@ public:
   void readFat();
   void readRootDir();
   bool readSectors(int lba, int count, void *buffer);
+
+  unsigned int getFreeCluster();
+  unsigned int getClusterSector(unsigned int cluster);
+
+  DirectoryEntry *findFile(const char *filename);
+
   unsigned int bytesToInt(byte *bytes, size_t size);
   unsigned int bytes16ToInt(byte *bytes);
   unsigned int bytes32ToInt(byte *bytes);
@@ -72,4 +82,6 @@ public:
 
   // Metodos para los comandos
   void listFiles();
+  void changeDir(const char *dirname);
+  void makeDir(string name);
 };
