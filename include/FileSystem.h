@@ -50,15 +50,21 @@ struct DirectoryEntry {
   byte size[4];
 
   bool isDir() { return (attributes & 0x10) != 0; }
+  bool isValid() {
+    char firstByte = name[0];
+    return !(firstByte == 0xE5 || firstByte == 0x00);
+  }
 };
 
 class FileSystem {
 
 private:
   BootSector bootSector;
-  DirectoryEntry *rootDirectory;
+  DirectoryEntry *currentDirectory;
   fstream *file;
   byte *fat;
+  string currentPath;
+  unsigned int currentCluster;
   unsigned int fatLength;
   unsigned int rootDirEnd;
 
@@ -69,9 +75,11 @@ public:
   void readFat();
   void readRootDir();
   bool readSectors(int lba, int count, void *buffer);
+  bool writeSectors(int lba, int count, void *buffer);
 
   unsigned int getFreeCluster();
   unsigned int getClusterSector(unsigned int cluster);
+  void allocDirectory(unsigned int sectors);
 
   DirectoryEntry *findFile(const char *filename);
 
@@ -79,6 +87,9 @@ public:
   unsigned int bytes16ToInt(byte *bytes);
   unsigned int bytes32ToInt(byte *bytes);
   void print();
+  string getPath() { return currentPath; }
+  void returnPath();
+  void changePath(string dirname);
 
   // Metodos para los comandos
   void listFiles();

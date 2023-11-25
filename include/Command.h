@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-typedef void (*function)(FileSystem &);
+typedef void (*function)(FileSystem &, string param);
 
 using std::string;
 using std::vector;
@@ -13,16 +13,20 @@ using std::vector;
 // nombre del comando
 // Crear una funcion que cree todos los comandos
 
-struct Flag {
+struct Flag
+{
   string name;
 
   Flag(string _name) : name(_name) {}
 };
 
-struct Command {
-  friend std::ostream &operator<<(std::ostream &out, const Command &com) {
+struct Command
+{
+  friend std::ostream &operator<<(std::ostream &out, const Command &com)
+  {
     out << "--- Comando " << com.name << " ---\n";
-    for (Flag flag : com.flags) {
+    for (Flag flag : com.flags)
+    {
       out << "Flag: " << flag.name << "\n";
     }
     return out;
@@ -35,7 +39,8 @@ struct Command {
   Command(string _name, function _callback)
       : name(_name), callback(_callback) {}
   void addFlag(string name) { flags.push_back(Flag{name}); }
-  void checkFlag(string flag) {
+  void checkFlag(string flag)
+  {
     // Check if flag is valid
   }
 };

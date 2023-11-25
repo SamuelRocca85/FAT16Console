@@ -3,15 +3,23 @@
 #include <iostream>
 #include <sstream>
 
-void lsCallback(FileSystem &fs) { fs.listFiles(); }
-void cdCallback(FileSystem &fs) {
+void lsCallback(FileSystem &fs, string param) { fs.listFiles(); }
+void cdCallback(FileSystem &fs, string param) {
   // std::cout << "Hola desde cd\n";
-  fs.changeDir("PRUEBA     ");
+  if (param.length() < 11) {
+    param.append(11 - param.length(), ' ');
+  }
+  fs.changeDir(param.c_str());
 }
-void catCallback(FileSystem &fs) { std::cout << "Hola desde cat\n"; }
-void mkdirCallback(FileSystem &fs) {
-  // std::cout << "Hola desde mkdir\n";
-  fs.makeDir("Hola");
+void catCallback(FileSystem &fs, string param) {
+  std::cout << "Hola desde cat\n";
+  fs.print();
+}
+void mkdirCallback(FileSystem &fs, string param) {
+  if (param.length() < 11) {
+    param.append(11 - param.length(), ' ');
+  }
+  fs.makeDir(param);
 }
 
 Console::Console(FileSystem &_fs) : fs(_fs) {
@@ -30,7 +38,7 @@ void Console::start() {
   string input = "";
 
   while (input != "exit") {
-    std::cout << ">> ";
+    std::cout << fs.getPath() << " >> ";
     std::getline(std::cin, input);
 
     vector<string> split = splitCommand(input);
@@ -42,7 +50,11 @@ void Console::start() {
       std::cout << "Comando invalido!\n";
       continue;
     }
-    commands.at(command).callback(fs);
+    string value = "";
+    for (int i = 1; i < split.size(); i++) {
+      value = split[i];
+    }
+    commands.at(command).callback(fs, value);
   }
 }
 
