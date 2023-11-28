@@ -1,5 +1,7 @@
 #include "Console.h"
 #include "FileSystem.h"
+#include <algorithm>
+#include <cctype>
 #include <iostream>
 #include <sstream>
 
@@ -17,10 +19,11 @@ void catCallback(FileSystem &fs, string param) {
   // fs.print();
 }
 void mkdirCallback(FileSystem &fs, string param) {
+  std::transform(param.begin(), param.end(), param.begin(), ::toupper);
   if (param.length() < 11) {
     param.append(11 - param.length(), ' ');
   }
-  fs.makeDir(param);
+  fs.makeDir(param.c_str());
 }
 
 Console::Console(FileSystem &_fs) : fs(_fs) {

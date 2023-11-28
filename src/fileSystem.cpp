@@ -1,6 +1,7 @@
 #include "FileSystem.h"
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <sstream>
@@ -97,8 +98,10 @@ bool FileSystem::writeSectors(int lba, int sectors, void *buffer) {
 
 unsigned int FileSystem::getFreeCluster() {
   for (int i = 0; i < fatLength; i++) {
-    if (fat[i] == 0x00) {
+    if (fat[i] == 0x00 || fat[i] == 0xff) {
       return i;
+    } else {
+      printf("Saltando el cluster %u con valor %02x\n", i, fat[i]);
     }
   }
   return -1;
@@ -122,11 +125,12 @@ void FileSystem::listFiles() {
     } else {
       printf("f: ");
     }
-    printf("%s - ", currentDirectory[i].name);
     currentDirectory[i].printDate();
     printf(" ");
     currentDirectory[i].printTime();
-    printf("\n");
+    uint16_t cluster = 0;
+    memcpy(&cluster, currentDirectory[i].clusterLow, 2);
+    printf("\t%u, %s\n", cluster, currentDirectory[i].name);
   }
   printf("\n");
 }
@@ -151,29 +155,33 @@ void FileSystem::changeDir(const char *dirname) {
   }
 }
 
-void FileSystem::makeDir(string name) {
-  std::transform(name.begin(), name.end(), name.begin(), ::toupper);
+void FileSystem::makeDir(const char *name) {
   unsigned int cluster = getFreeCluster();
   if (cluster != -1) {
     unsigned int lba = getClusterSector(cluster);
-
-    DirectoryEntry newDir(name.c_str(), cluster);
+    DirectoryEntry *newDir = new DirectoryEntry(name, cluster);
     for (int i = 0; i < bytes16ToInt(bootSector.rootEntriesMax); i++) {
       if (!currentDirectory[i].isValid()) {
-        currentDirectory[i] = newDir;
-        fat[cluster] = 0xf8;
+        printf("Guardando directorio %s...\n", newDir->name);
+        currentDirectory[i] = *newDir;
+        // printf("Directorio %s guardado...\n", currentDirectory[i].name);
+        fat[cluster] = 0xff;
         break;
       }
     }
-    DirectoryEntry parent("..         ", currentCluster);
-    DirectoryEntry self(".          ", cluster);
+    string dot = ".";
+    dot.append(11 - dot.length(), ' ');
+    DirectoryEntry *parent = new DirectoryEntry("..         ", currentCluster);
+    DirectoryEntry *self = new DirectoryEntry(dot.c_str(), cluster);
     DirectoryEntry *newDirEntries =
         new DirectoryEntry[bootSector.sectorsPerCluster *
                            bytes16ToInt(bootSector.bytesPerSector)];
-    readSectors(lba, bootSector.sectorsPerCluster, newDirEntries);
-    newDirEntries[0] = self;
-    newDirEntries[1] = parent;
+    // readSectors(lba, bootSector.sectorsPerCluster, newDirEntries);
+    newDirEntries[0] = *self;
+    newDirEntries[1] = *parent;
 
+    printf("Directorio %s guardado...\n", self->name);
+    printf("Directorio %s guardado...\n", parent->name);
     writeSectors(getClusterSector(currentCluster), bootSector.sectorsPerCluster,
                  currentDirectory);
     writeSectors(bytes16ToInt(bootSector.reservedAreaSectors),

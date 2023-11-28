@@ -56,31 +56,29 @@ struct DirectoryEntry {
   DirectoryEntry(const char *_name, unsigned int _cluster) {
     byte highEmpty[2] = {0, 0};
     memcpy(name, _name, 11);
+    printf("Creando directorio %s...\n", name);
     memcpy(clusterLow, &_cluster, 2);
     memcpy(clusterHigh, highEmpty, 2);
     attributes = 0x10;
-    setDates();
-    setTimes();
-  }
-
-  void setDates() {
     time_t currTime;
     currTime = time(NULL);
     tm *time = localtime(&currTime);
-    uint16_t fecha;
+    setDates(time);
+    setTimes(time);
+  }
+
+  void setDates(tm *time) {
+    uint16_t fecha = 0;
     uint16_t year = time->tm_year - 80;
     fecha |= static_cast<uint16_t>(time->tm_mday);
-    fecha |= static_cast<uint16_t>(time->tm_mon << 5);
+    fecha |= static_cast<uint16_t>((time->tm_mon + 1) << 5);
     fecha |= static_cast<uint16_t>(year << 9);
     memcpy(createdDate, &fecha, 2);
     memcpy(accesedDate, &fecha, 2);
     memcpy(modifiedDate, &fecha, 2);
   }
 
-  void setTimes() {
-    time_t currTime;
-    currTime = time(NULL);
-    tm *time = localtime(&currTime);
+  void setTimes(tm *time) {
     uint16_t tiempo;
     tiempo |= static_cast<uint16_t>(time->tm_sec);
     tiempo |= static_cast<uint16_t>(time->tm_min << 5);
@@ -154,6 +152,6 @@ public:
   // Metodos para los comandos
   void listFiles();
   void changeDir(const char *dirname);
-  void makeDir(string name);
+  void makeDir(const char *name);
   void catFile(string filename);
 };
