@@ -12,8 +12,9 @@ void cdCallback(FileSystem &fs, string param) {
   fs.changeDir(param.c_str());
 }
 void catCallback(FileSystem &fs, string param) {
-  std::cout << "Hola desde cat\n";
-  fs.print();
+  param = fs.parseFileName(param);
+  fs.catFile(param);
+  // fs.print();
 }
 void mkdirCallback(FileSystem &fs, string param) {
   if (param.length() < 11) {

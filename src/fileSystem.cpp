@@ -16,6 +16,7 @@ FileSystem::FileSystem(string filename) : currentDirectory(nullptr) {
   readBootSector();
   readFat();
   readRootDir();
+  // print();
 }
 
 FileSystem::~FileSystem() {
@@ -57,7 +58,7 @@ void FileSystem::readRootDir() {
   rootDirEnd = lba + sectors;
   currentPath = "/";
   currentCluster = 0;
-  printf("Sectores del root %u\n", sectors);
+  // printf("Sectores del root %u\n", sectors);
   allocDirectory(sectors);
   readSectors(lba, sectors, currentDirectory);
 }
@@ -98,8 +99,6 @@ unsigned int FileSystem::getFreeCluster() {
   for (int i = 0; i < fatLength; i++) {
     if (fat[i] == 0x00) {
       return i;
-    } else {
-      printf("Cluster %u cupado con %02x\n", i, fat[i]);
     }
   }
   return -1;
@@ -123,8 +122,11 @@ void FileSystem::listFiles() {
     } else {
       printf("f: ");
     }
-    printf("%s - %u\n", currentDirectory[i].name,
-           bytes16ToInt(currentDirectory[i].clusterLow));
+    printf("%s - ", currentDirectory[i].name);
+    currentDirectory[i].printDate();
+    printf(" ");
+    currentDirectory[i].printTime();
+    printf("\n");
   }
   printf("\n");
 }
@@ -154,11 +156,8 @@ void FileSystem::makeDir(string name) {
   unsigned int cluster = getFreeCluster();
   if (cluster != -1) {
     unsigned int lba = getClusterSector(cluster);
-    // printf("Creando dir en cluster %u, sector %u\n", cluster, lba);
-    DirectoryEntry newDir;
-    std::memcpy(newDir.name, name.c_str(), 11);
-    newDir.attributes = 0x10;
-    std::memcpy(newDir.clusterLow, &cluster, 2);
+
+    DirectoryEntry newDir(name.c_str(), cluster);
     for (int i = 0; i < bytes16ToInt(bootSector.rootEntriesMax); i++) {
       if (!currentDirectory[i].isValid()) {
         currentDirectory[i] = newDir;
@@ -166,11 +165,29 @@ void FileSystem::makeDir(string name) {
         break;
       }
     }
+    DirectoryEntry parent("..         ", currentCluster);
+    DirectoryEntry self(".          ", cluster);
+    DirectoryEntry *newDirEntries =
+        new DirectoryEntry[bootSector.sectorsPerCluster *
+                           bytes16ToInt(bootSector.bytesPerSector)];
+    readSectors(lba, bootSector.sectorsPerCluster, newDirEntries);
+    newDirEntries[0] = self;
+    newDirEntries[1] = parent;
 
     writeSectors(getClusterSector(currentCluster), bootSector.sectorsPerCluster,
                  currentDirectory);
     writeSectors(bytes16ToInt(bootSector.reservedAreaSectors),
                  bytes16ToInt(bootSector.sectorsPerFat), fat);
+    writeSectors(lba, bootSector.sectorsPerCluster, newDirEntries);
+    delete[] newDirEntries;
+  }
+}
+
+void FileSystem::catFile(string filename) {
+  DirectoryEntry *entry = findFile(filename.c_str());
+
+  if (entry != NULL && !entry->isDir()) {
+    printf("Encontre %s\n", entry->name);
   }
 }
 
@@ -198,6 +215,26 @@ unsigned int FileSystem::bytes32ToInt(byte *bytes) {
   return bytesToInt(bytes, 4);
 }
 
+string FileSystem::parseFileName(string filename) {
+  string parsedName = "";
+  char *ext = new char[3];
+
+  ext[0] = filename[filename.length() - 1];
+  ext[1] = filename[filename.length() - 2];
+  ext[2] = filename[filename.length() - 3];
+  for (int i = 0; i < filename.length(); i++) {
+    if (filename[i] == '.') {
+      parsedName[i] = ' ';
+      break;
+    }
+    parsedName.append(1, filename[i]);
+  }
+  if (parsedName.length() < 8) {
+    parsedName.append(8 - parsedName.length(), ' ');
+  }
+  return parsedName + ext;
+}
+
 void FileSystem::allocDirectory(unsigned int sectors) {
   if (currentDirectory != nullptr) {
     // printf("Haciendo realloc con %u sectores\n", sectors);
@@ -214,6 +251,8 @@ void FileSystem::allocDirectory(unsigned int sectors) {
 void FileSystem::changePath(string dirname) {
   if (string(dirname) == "..         ") {
     returnPath();
+  } else if (string(dirname) == ".          ") {
+    return;
   } else {
     string resultado = dirname;
     resultado.erase(
@@ -240,6 +279,7 @@ void FileSystem::returnPath() {
   for (size_t i = 1; i < segmentos.size(); ++i) {
     currentPath += "/" + segmentos[i];
   }
+  currentPath += "/";
 }
 
 void FileSystem::print() {
