@@ -1,4 +1,5 @@
 #include "FileSystem.h"
+#include "Directory.h"
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
@@ -23,13 +24,12 @@ FileSystem::FileSystem(string filename) : currentDirectory(nullptr) {
 FileSystem::~FileSystem() {
   file->close();
   delete file;
-  delete[] fat;
-  delete[] currentDirectory;
+  delete currentDirectory;
+  delete[] fat.table;
 }
 
 void FileSystem::readBootSector() {
-  file->read(reinterpret_cast<char *>(&bootSector), sizeof(bootSector));
-
+  file->read(reinterpret_cast<char *>(&bootSector), sizeof(BootSector));
   if (!file) {
     std::cerr << "Error al leer desde el archivo" << std::endl;
     file->close();
@@ -40,10 +40,9 @@ void FileSystem::readBootSector() {
 void FileSystem::readFat() {
   unsigned int length = bytes16ToInt(bootSector.sectorsPerFat) *
                         bytes16ToInt(bootSector.bytesPerSector);
-  fat = new byte[length];
-  fatLength = length;
-  readSectors(bytes16ToInt(bootSector.reservedAreaSectors),
-              bytes16ToInt(bootSector.sectorsPerFat), fat);
+  fat = Fat(length, bytes16ToInt(bootSector.reservedAreaSectors),
+            bytes16ToInt(bootSector.reservedAreaSectors));
+  readSectors(fat.startSector, fat.totalSectors, fat.table);
 }
 
 void FileSystem::readRootDir() {
@@ -58,17 +57,18 @@ void FileSystem::readRootDir() {
   }
   rootDirEnd = lba + sectors;
   currentPath = "/";
-  currentCluster = 0;
-  // printf("Sectores del root %u\n", sectors);
-  allocDirectory(sectors);
-  readSectors(lba, sectors, currentDirectory);
+  // allocDirectory(sectors);
+  if (currentDirectory != nullptr)
+    delete currentDirectory;
+  currentDirectory =
+      new Directory(sectors, 0, bytes16ToInt(bootSector.bytesPerSector));
+  readSectors(lba, sectors, currentDirectory->entries);
 }
 
 bool FileSystem::readSectors(int lba, int sectors, void *buffer) {
   file->seekg(lba * bytes16ToInt(bootSector.bytesPerSector), file->beg);
 
   unsigned int bytesToRead = sectors * bytes16ToInt(bootSector.bytesPerSector);
-  // printf("Reading %u bytes...\n", bytesToRead);
   file->read(reinterpret_cast<char *>(buffer), bytesToRead);
 
   if (!file) {
@@ -97,11 +97,9 @@ bool FileSystem::writeSectors(int lba, int sectors, void *buffer) {
 }
 
 unsigned int FileSystem::getFreeCluster() {
-  for (int i = 0; i < fatLength; i++) {
-    if (fat[i] == 0x00 || fat[i] == 0xff) {
+  for (int i = 0; i < fat.length; i++) {
+    if (fat.table[i] == 0x00) {
       return i;
-    } else {
-      printf("Saltando el cluster %u con valor %02x\n", i, fat[i]);
     }
   }
   return -1;
@@ -116,39 +114,39 @@ unsigned int FileSystem::getClusterSector(unsigned int cluster) {
 }
 
 void FileSystem::listFiles() {
-  for (unsigned int i = 0; i < bytes16ToInt(bootSector.rootEntriesMax); i++) {
-    if (!currentDirectory[i].isValid()) {
-      continue;
+  for (unsigned int i = 0; i < currentDirectory->getSize(); i++) {
+    if (!currentDirectory->entries[i].isValid()) {
+      break;
     }
-    if (currentDirectory[i].isDir()) {
+    if (currentDirectory->entries[i].isDir()) {
       printf("d: ");
     } else {
       printf("f: ");
     }
-    currentDirectory[i].printDate();
+    currentDirectory->entries[i].printDate();
     printf(" ");
-    currentDirectory[i].printTime();
-    uint16_t cluster = 0;
-    memcpy(&cluster, currentDirectory[i].clusterLow, 2);
-    printf("\t%u, %s\n", cluster, currentDirectory[i].name);
+    currentDirectory->entries[i].printTime();
+    printf("\t%u\t%s\n", bytes16ToInt(currentDirectory->entries[i].clusterLow),
+           currentDirectory->entries[i].name);
   }
   printf("\n");
 }
 
 void FileSystem::changeDir(const char *dirname) {
-  DirectoryEntry *dir = findFile(dirname);
+  DirectoryEntry *dir = currentDirectory->findEntry(dirname);
   if (dir != NULL && dir->isDir()) {
-    // printf("Found dir %s\n", dir->name);
     unsigned int cluster = bytes16ToInt(dir->clusterLow);
-    currentCluster = cluster;
     if (cluster == 0) {
       readRootDir();
       return;
     }
     unsigned int lba = getClusterSector(cluster);
-    // printf("cd to cluster %u, sector %u\n", cluster, lba);
-    allocDirectory(bootSector.sectorsPerCluster);
-    readSectors(lba, bootSector.sectorsPerCluster, currentDirectory);
+    if (currentDirectory != nullptr) {
+      delete currentDirectory;
+    }
+    currentDirectory = new Directory(bootSector.sectorsPerCluster, cluster,
+                                     bytes16ToInt(bootSector.bytesPerSector));
+    readSectors(lba, bootSector.sectorsPerCluster, currentDirectory->entries);
     changePath(dirname);
   } else {
     printf("directorio %s no existe\n", dirname);
@@ -159,54 +157,26 @@ void FileSystem::makeDir(const char *name) {
   unsigned int cluster = getFreeCluster();
   if (cluster != -1) {
     unsigned int lba = getClusterSector(cluster);
-    DirectoryEntry *newDir = new DirectoryEntry(name, cluster);
-    for (int i = 0; i < bytes16ToInt(bootSector.rootEntriesMax); i++) {
-      if (!currentDirectory[i].isValid()) {
-        printf("Guardando directorio %s...\n", newDir->name);
-        currentDirectory[i] = *newDir;
-        // printf("Directorio %s guardado...\n", currentDirectory[i].name);
-        fat[cluster] = 0xff;
-        break;
-      }
+    DirectoryEntry *newDir = currentDirectory->createEntry(name, cluster);
+
+    if (newDir == NULL) {
+      printf("No se pudo crear el directorio\n");
+      return;
     }
-    string dot = ".";
-    dot.append(11 - dot.length(), ' ');
-    DirectoryEntry *parent = new DirectoryEntry("..         ", currentCluster);
-    DirectoryEntry *self = new DirectoryEntry(dot.c_str(), cluster);
-    DirectoryEntry *newDirEntries =
-        new DirectoryEntry[bootSector.sectorsPerCluster *
-                           bytes16ToInt(bootSector.bytesPerSector)];
-    // readSectors(lba, bootSector.sectorsPerCluster, newDirEntries);
-    newDirEntries[0] = *self;
-    newDirEntries[1] = *parent;
 
-    printf("Directorio %s guardado...\n", self->name);
-    printf("Directorio %s guardado...\n", parent->name);
-    writeSectors(getClusterSector(currentCluster), bootSector.sectorsPerCluster,
-                 currentDirectory);
-    writeSectors(bytes16ToInt(bootSector.reservedAreaSectors),
-                 bytes16ToInt(bootSector.sectorsPerFat), fat);
-    writeSectors(lba, bootSector.sectorsPerCluster, newDirEntries);
-    delete[] newDirEntries;
+    fat.table[cluster] = 0xff;
+    Directory *dir = new Directory(bootSector.sectorsPerCluster, cluster,
+                                   bytes16ToInt(bootSector.bytesPerSector),
+                                   currentDirectory->getCluster());
+
+    writeSectors(getClusterSector(currentDirectory->getCluster()),
+                 currentDirectory->getSectors(), currentDirectory->entries);
+    writeSectors(fat.startSector, fat.totalSectors, fat.table);
+    writeSectors(getClusterSector(dir->getCluster()), dir->getSectors(),
+                 dir->entries);
+    delete newDir;
+    delete dir;
   }
-}
-
-void FileSystem::catFile(string filename) {
-  DirectoryEntry *entry = findFile(filename.c_str());
-
-  if (entry != NULL && !entry->isDir()) {
-    printf("Encontre %s\n", entry->name);
-  }
-}
-
-DirectoryEntry *FileSystem::findFile(const char *filename) {
-  for (unsigned int i = 0; i < bytes16ToInt(bootSector.rootEntriesMax); i++) {
-    if (std::memcmp(filename, currentDirectory[i].name, 11) == 0) {
-      // printf("%s == %s\n", filename, currentDirectory[i].name);
-      return &currentDirectory[i];
-    }
-  }
-  return NULL;
 }
 
 unsigned int FileSystem::bytesToInt(byte *bytes, size_t size) {
@@ -241,19 +211,6 @@ string FileSystem::parseFileName(string filename) {
     parsedName.append(8 - parsedName.length(), ' ');
   }
   return parsedName + ext;
-}
-
-void FileSystem::allocDirectory(unsigned int sectors) {
-  if (currentDirectory != nullptr) {
-    // printf("Haciendo realloc con %u sectores\n", sectors);
-    DirectoryEntry *tmp =
-        new DirectoryEntry[sectors * bytes16ToInt(bootSector.bytesPerSector)];
-    delete[] currentDirectory;
-    currentDirectory = tmp;
-    return;
-  }
-  currentDirectory =
-      new DirectoryEntry[sectors * bytes16ToInt(bootSector.bytesPerSector)];
 }
 
 void FileSystem::changePath(string dirname) {

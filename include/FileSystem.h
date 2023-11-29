@@ -1,4 +1,5 @@
 #pragma once
+#include "Directory.h"
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -6,8 +7,6 @@
 #include <fstream>
 #include <iostream>
 #include <string>
-
-typedef unsigned char byte;
 
 using std::fstream;
 using std::string;
@@ -36,93 +35,33 @@ struct BootSector {
   byte systemId[8];
 };
 
-struct DirectoryEntry {
-  byte name[11];
-  byte attributes;
-  byte reserved;
-  byte createdTimeTenths;
-  byte createdTime[2];
-  byte createdDate[2];
-  byte accesedDate[2];
-  byte clusterHigh[2];
-  byte modifiedTime[2];
-  byte modifiedDate[2];
-  byte clusterLow[2];
-  byte size[4];
+struct Fat {
+  byte *table;
+  unsigned int length;
+  unsigned int startSector;
+  unsigned int totalSectors;
 
-  bool isDir() { return (attributes & 0x10) != 0; }
-  bool isValid() { return !(name[0] == 0xE5 || name[0] == 0x00); }
-
-  DirectoryEntry(const char *_name, unsigned int _cluster) {
-    byte highEmpty[2] = {0, 0};
-    memcpy(name, _name, 11);
-    printf("Creando directorio %s...\n", name);
-    memcpy(clusterLow, &_cluster, 2);
-    memcpy(clusterHigh, highEmpty, 2);
-    attributes = 0x10;
-    time_t currTime;
-    currTime = time(NULL);
-    tm *time = localtime(&currTime);
-    setDates(time);
-    setTimes(time);
+  Fat() {
+    length = 0;
+    startSector = 0;
+    totalSectors = 0;
+    table = NULL;
   }
-
-  void setDates(tm *time) {
-    uint16_t fecha = 0;
-    uint16_t year = time->tm_year - 80;
-    fecha |= static_cast<uint16_t>(time->tm_mday);
-    fecha |= static_cast<uint16_t>((time->tm_mon + 1) << 5);
-    fecha |= static_cast<uint16_t>(year << 9);
-    memcpy(createdDate, &fecha, 2);
-    memcpy(accesedDate, &fecha, 2);
-    memcpy(modifiedDate, &fecha, 2);
-  }
-
-  void setTimes(tm *time) {
-    uint16_t tiempo;
-    tiempo |= static_cast<uint16_t>(time->tm_sec);
-    tiempo |= static_cast<uint16_t>(time->tm_min << 5);
-    tiempo |= static_cast<uint16_t>(time->tm_hour << 11);
-    memcpy(createdTime, &tiempo, 2);
-    memcpy(modifiedTime, &tiempo, 2);
-  }
-
-  void printDate() {
-    uint16_t date;
-    memcpy(&date, createdDate, 2);
-    uint16_t y = ((date & 0b1111111000000000) >> 9);
-    uint16_t m = ((date & 0b0000000111100000) >> 5);
-    uint16_t d = date & 0b0000000000011111;
-
-    printf("%u/%u/%u", d, m, y + 1980);
-  }
-
-  void printTime() {
-    uint16_t time;
-    memcpy(&time, createdTime, 2);
-    uint16_t h = ((time & 0b1111100000000000) >> 11);
-    uint16_t m = ((time & 0b0000011111100000) >> 5);
-    uint16_t s = (time & 0b0000000000011111);
-
-    printf("%u:%u:%u", h, m, s);
-  }
-
-  DirectoryEntry() {
-    //
-    name[0] = 0x00;
+  Fat(unsigned int _length, unsigned int _startSector,
+      unsigned int _totalSectors)
+      : length(_length), startSector(_startSector),
+        totalSectors(_totalSectors) {
+    table = new byte[length];
   }
 };
 
 class FileSystem {
-
 private:
   BootSector bootSector;
-  DirectoryEntry *currentDirectory;
+  Directory *currentDirectory;
+  Fat fat;
   fstream *file;
-  byte *fat;
   string currentPath;
-  unsigned int currentCluster;
-  unsigned int fatLength;
   unsigned int rootDirEnd;
 
 public:
@@ -136,9 +75,7 @@ public:
 
   unsigned int getFreeCluster();
   unsigned int getClusterSector(unsigned int cluster);
-  void allocDirectory(unsigned int sectors);
-
-  DirectoryEntry *findFile(const char *filename);
+  // void allocDirectory(unsigned int sectors);
 
   unsigned int bytesToInt(byte *bytes, size_t size);
   unsigned int bytes16ToInt(byte *bytes);
@@ -153,5 +90,5 @@ public:
   void listFiles();
   void changeDir(const char *dirname);
   void makeDir(const char *name);
-  void catFile(string filename);
+  // void catFile(string filename);
 };

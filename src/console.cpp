@@ -15,8 +15,8 @@ void cdCallback(FileSystem &fs, string param) {
 }
 void catCallback(FileSystem &fs, string param) {
   param = fs.parseFileName(param);
-  fs.catFile(param);
-  // fs.print();
+  // fs.catFile(param);
+  fs.print();
 }
 void mkdirCallback(FileSystem &fs, string param) {
   std::transform(param.begin(), param.end(), param.begin(), ::toupper);
