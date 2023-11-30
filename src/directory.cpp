@@ -16,8 +16,8 @@ Directory::Directory(unsigned int _sectors, unsigned int _cluster,
   size = totalBytes / sizeof(DirectoryEntry);
   entries = new DirectoryEntry[size];
 
-  DirectoryEntry self(".          ", cluster);
-  DirectoryEntry parent("..         ", parentCluster);
+  DirectoryEntry self(".          ", cluster, DIRECTORY);
+  DirectoryEntry parent("..         ", parentCluster, DIRECTORY);
 
   entries[0] = self;
   entries[1] = parent;
@@ -36,7 +36,7 @@ DirectoryEntry *Directory::findEntry(const char *entryName) {
 }
 
 DirectoryEntry *Directory::createEntry(const char *name, unsigned int cluster) {
-  DirectoryEntry *newDir = new DirectoryEntry(name, cluster);
+  DirectoryEntry *newDir = new DirectoryEntry(name, cluster, DIRECTORY);
 
   for (int i = 0; i < size; i++) {
     if (!entries[i].isValid()) {
@@ -45,6 +45,5 @@ DirectoryEntry *Directory::createEntry(const char *name, unsigned int cluster) {
     }
   }
 
-  delete newDir;
   return NULL;
 }

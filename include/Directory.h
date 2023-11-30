@@ -7,6 +7,15 @@
 
 typedef unsigned char byte;
 
+enum DirectoryAttribute {
+  READ_ONLY = 0x01,
+  HIDDEN = 0x02,
+  SYSTEM_FILE = 0x04,
+  VOLUME_LABEL = 0x08,
+  LONG_NAME = 0x0f,
+  DIRECTORY = 0x10,
+  ARCHIVE = 0x20,
+};
 #pragma pack(push, 1)
 struct DirectoryEntry {
   byte name[11];
@@ -22,15 +31,16 @@ struct DirectoryEntry {
   byte clusterLow[2];
   byte size[4];
 
-  bool isDir() { return (attributes & 0x10) != 0; }
+  bool isDir() { return (attributes & DIRECTORY) != 0; }
+  bool isVolumeLabel() { return (attributes & VOLUME_LABEL) != 0; }
   bool isValid() { return !(name[0] == 0xE5 || name[0] == 0x00); }
 
-  DirectoryEntry(const char *_name, unsigned int _cluster) {
+  DirectoryEntry(const char *_name, unsigned int _cluster, byte _attributes) {
     byte highEmpty[2] = {0, 0};
     memcpy(name, _name, 11);
     memcpy(clusterLow, &_cluster, 2);
     memcpy(clusterHigh, highEmpty, 2);
-    attributes = 0x10;
+    attributes = _attributes;
     time_t currTime;
     currTime = time(NULL);
     tm *time = localtime(&currTime);

@@ -14,7 +14,7 @@ void cdCallback(FileSystem &fs, string param) {
   fs.changeDir(param.c_str());
 }
 void catCallback(FileSystem &fs, string param) {
-  param = fs.parseFileName(param);
+  // param = fs.parseFileName(param);
   // fs.catFile(param);
   fs.print();
 }

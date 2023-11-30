@@ -41,7 +41,8 @@ void FileSystem::readFat() {
   unsigned int length = bytes16ToInt(bootSector.sectorsPerFat) *
                         bytes16ToInt(bootSector.bytesPerSector);
   fat = Fat(length, bytes16ToInt(bootSector.reservedAreaSectors),
-            bytes16ToInt(bootSector.reservedAreaSectors));
+            bytes16ToInt(bootSector.sectorsPerFat));
+
   readSectors(fat.startSector, fat.totalSectors, fat.table);
 }
 
@@ -117,6 +118,8 @@ void FileSystem::listFiles() {
   for (unsigned int i = 0; i < currentDirectory->getSize(); i++) {
     if (!currentDirectory->entries[i].isValid()) {
       break;
+    } else if (currentDirectory->entries[i].isVolumeLabel()) {
+      continue;
     }
     if (currentDirectory->entries[i].isDir()) {
       printf("d: ");
