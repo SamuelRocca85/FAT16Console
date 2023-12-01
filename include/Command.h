@@ -4,43 +4,34 @@
 #include <string>
 #include <vector>
 
-typedef void (*function)(FileSystem &, string param);
+#define NULL_STRING " "
+
+struct Param;
+
+typedef void (*function)(FileSystem &, Param &param);
 
 using std::string;
 using std::vector;
 
-// Crear una clase que guarde un map de <string, Command> donde el string es el
-// nombre del comando
-// Crear una funcion que cree todos los comandos
-
-struct Flag
-{
+struct Param {
   string name;
+  string value;
 
-  Flag(string _name) : name(_name) {}
+  Param() : value(NULL_STRING), name(NULL_STRING) {}
+  Param(string _value) : name(NULL_STRING), value(_value) {}
+  Param(string _name, string _value) : name(_name), value(_value) {}
 };
 
-struct Command
-{
-  friend std::ostream &operator<<(std::ostream &out, const Command &com)
-  {
+struct Command {
+  friend std::ostream &operator<<(std::ostream &out, const Command &com) {
     out << "--- Comando " << com.name << " ---\n";
-    for (Flag flag : com.flags)
-    {
-      out << "Flag: " << flag.name << "\n";
-    }
     return out;
   }
-  vector<Flag> flags;
   string name;
+  Param param;
   function callback;
 
   Command(string _name) : name(_name) {}
   Command(string _name, function _callback)
       : name(_name), callback(_callback) {}
-  void addFlag(string name) { flags.push_back(Flag{name}); }
-  void checkFlag(string flag)
-  {
-    // Check if flag is valid
-  }
 };

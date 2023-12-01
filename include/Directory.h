@@ -7,6 +7,8 @@
 
 typedef unsigned char byte;
 
+using std::string;
+
 enum DirectoryAttribute {
   READ_ONLY = 0x01,
   HIDDEN = 0x02,
@@ -102,6 +104,9 @@ private:
   unsigned int size; // Cantidad de entries
   unsigned int cluster;
 
+  DirectoryEntry *createEntry(const char *name, unsigned int cluster,
+                              byte attributes);
+
 public:
   DirectoryEntry *entries;
   Directory(unsigned int sectors, unsigned int cluster, unsigned int bps);
@@ -109,7 +114,8 @@ public:
             unsigned int parentCluster);
   ~Directory();
   DirectoryEntry *findEntry(const char *entryName);
-  DirectoryEntry *createEntry(const char *name, unsigned int cluster);
+  DirectoryEntry *createSubDir(const char *name, unsigned int cluster);
+  DirectoryEntry *createFile(const char *name, unsigned int firstCluster);
 
   unsigned int getSize() { return size; }
   unsigned int getCluster() { return cluster; }

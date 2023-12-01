@@ -5,25 +5,40 @@
 #include <iostream>
 #include <sstream>
 
-void lsCallback(FileSystem &fs, string param) { fs.listFiles(); }
-void cdCallback(FileSystem &fs, string param) {
+void lsCallback(FileSystem &fs, Param &param) { fs.listFiles(); }
+void cdCallback(FileSystem &fs, Param &param) {
   // std::cout << "Hola desde cd\n";
-  if (param.length() < 11) {
-    param.append(11 - param.length(), ' ');
+  string value = param.value;
+  if (value.length() < 11) {
+    value.append(11 - value.length(), ' ');
   }
-  fs.changeDir(param.c_str());
+  fs.changeDir(value.c_str());
 }
-void catCallback(FileSystem &fs, string param) {
-  // param = fs.parseFileName(param);
-  // fs.catFile(param);
-  fs.print();
-}
-void mkdirCallback(FileSystem &fs, string param) {
-  std::transform(param.begin(), param.end(), param.begin(), ::toupper);
-  if (param.length() < 11) {
-    param.append(11 - param.length(), ' ');
+void catCallback(FileSystem &fs, Param &param) {
+  string value = param.value;
+  std::transform(value.begin(), value.end(), value.begin(), ::toupper);
+
+  if (param.name.compare(NULL_STRING) == 0) {
+    // Mostrar contenido de archivo
+    fs.catFile(value.c_str());
+    return;
+  } else if (param.name == ">") {
+    // Crear archivo
+    fs.createFile(value.c_str());
+    return;
+  } else {
+    printf("Uso incorecto de cat: parametro %s invalido\n",
+           param.value.c_str());
+    return;
   }
-  fs.makeDir(param.c_str());
+}
+void mkdirCallback(FileSystem &fs, Param &param) {
+  string value = param.value;
+  std::transform(value.begin(), value.end(), value.begin(), ::toupper);
+  if (value.length() < 11) {
+    value.append(11 - value.length(), ' ');
+  }
+  fs.makeDir(value.c_str());
 }
 
 Console::Console(FileSystem &_fs) : fs(_fs) {
@@ -54,11 +69,14 @@ void Console::start() {
       std::cout << "Comando invalido!\n";
       continue;
     }
-    string value = "";
-    for (int i = 1; i < split.size(); i++) {
-      value = split[i];
+    Param param;
+    if (split.size() == 2) {
+      param.value = split[1];
+    } else if (split.size() == 3) {
+      param.name = split[1];
+      param.value = split[2];
     }
-    commands.at(command).callback(fs, value);
+    commands.at(command).callback(fs, param);
   }
 }
 

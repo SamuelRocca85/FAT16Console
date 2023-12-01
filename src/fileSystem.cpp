@@ -57,6 +57,7 @@ void FileSystem::readRootDir() {
     sectors++;
   }
   rootDirEnd = lba + sectors;
+  printf("%u, %u\n", lba, rootDirEnd);
   currentPath = "/";
   // allocDirectory(sectors);
   if (currentDirectory != nullptr)
@@ -121,16 +122,19 @@ void FileSystem::listFiles() {
     } else if (currentDirectory->entries[i].isVolumeLabel()) {
       continue;
     }
+    string name = "";
     if (currentDirectory->entries[i].isDir()) {
       printf("d: ");
+      name = bytesToString(currentDirectory->entries[i].name);
     } else {
       printf("f: ");
+      name = bytesToString(currentDirectory->entries[i].name);
     }
     currentDirectory->entries[i].printDate();
     printf(" ");
     currentDirectory->entries[i].printTime();
     printf("\t%u\t%s\n", bytes16ToInt(currentDirectory->entries[i].clusterLow),
-           currentDirectory->entries[i].name);
+           name.c_str());
   }
   printf("\n");
 }
@@ -160,14 +164,14 @@ void FileSystem::makeDir(const char *name) {
   unsigned int cluster = getFreeCluster();
   if (cluster != -1) {
     unsigned int lba = getClusterSector(cluster);
-    DirectoryEntry *newDir = currentDirectory->createEntry(name, cluster);
+    DirectoryEntry *newDir = currentDirectory->createSubDir(name, cluster);
 
     if (newDir == NULL) {
       printf("No se pudo crear el directorio\n");
       return;
     }
 
-    fat.table[cluster] = 0xff;
+    fat.table[cluster] = 0xf8;
     Directory *dir = new Directory(bootSector.sectorsPerCluster, cluster,
                                    bytes16ToInt(bootSector.bytesPerSector),
                                    currentDirectory->getCluster());
@@ -179,6 +183,25 @@ void FileSystem::makeDir(const char *name) {
                  dir->entries);
     delete newDir;
     delete dir;
+  }
+}
+
+void FileSystem::createFile(const char *filename) {
+  //
+  string name = parseFileName(filename);
+
+  // printf("Archivo %s: %s\n", filename, name.c_str());
+  // std::cout << filename << "," << name << "\n";
+  currentDirectory->createFile(name.c_str(), getFreeCluster());
+  return;
+}
+
+void FileSystem::catFile(const char *name) {
+  DirectoryEntry *dirFile =
+      currentDirectory->findEntry(parseFileName(name).c_str());
+
+  if (dirFile != NULL && !dirFile->isDir()) {
+    printf("Encontre el archivo %s\n", dirFile->name);
   }
 }
 
@@ -196,13 +219,18 @@ unsigned int FileSystem::bytes32ToInt(byte *bytes) {
   return bytesToInt(bytes, 4);
 }
 
+string FileSystem::bytesToString(byte *bytes) {
+  return string(reinterpret_cast<char *>(bytes), 11);
+}
+
 string FileSystem::parseFileName(string filename) {
   string parsedName = "";
   char *ext = new char[3];
 
-  ext[0] = filename[filename.length() - 1];
+  ext[0] = filename[filename.length() - 3];
   ext[1] = filename[filename.length() - 2];
-  ext[2] = filename[filename.length() - 3];
+  ext[2] = filename[filename.length() - 1];
+  // ext[3] = '\0';
   for (int i = 0; i < filename.length(); i++) {
     if (filename[i] == '.') {
       parsedName[i] = ' ';
@@ -213,7 +241,27 @@ string FileSystem::parseFileName(string filename) {
   if (parsedName.length() < 8) {
     parsedName.append(8 - parsedName.length(), ' ');
   }
-  return parsedName + ext;
+  parsedName.append(string(ext));
+  return parsedName;
+}
+
+string FileSystem::prettyFileName(string filename) {
+  string parsedName = "";
+  char *ext = new char[3];
+  // printf("Pretty %s, %u\n", filename.c_str(), filename.length());
+  ext[0] = filename[filename.length() - 3];
+  ext[1] = filename[filename.length() - 2];
+  ext[2] = filename[filename.length() - 1];
+  // ext[3] = '\0';
+  for (int i = 0; i < filename.length(); i++) {
+    if (filename[i] == ' ') {
+      parsedName.append(1, '.');
+      break;
+    }
+    parsedName.append(1, filename[i]);
+  }
+  parsedName.append(string(ext));
+  return parsedName;
 }
 
 void FileSystem::changePath(string dirname) {

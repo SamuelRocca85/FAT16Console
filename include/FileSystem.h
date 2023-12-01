@@ -80,15 +80,18 @@ public:
   unsigned int bytesToInt(byte *bytes, size_t size);
   unsigned int bytes16ToInt(byte *bytes);
   unsigned int bytes32ToInt(byte *bytes);
+  string bytesToString(byte *bytes);
   void print();
   string getPath() { return currentPath; }
   void returnPath();
   string parseFileName(string filename);
+  string prettyFileName(string filename);
   void changePath(string dirname);
 
   // Metodos para los comandos
   void listFiles();
   void changeDir(const char *dirname);
   void makeDir(const char *name);
-  // void catFile(string filename);
+  void catFile(const char *filename);
+  void createFile(const char *filename);
 };

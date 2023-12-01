@@ -1,5 +1,6 @@
 #include "Directory.h"
 #include <cstdio>
+#include <cstring>
 
 Directory::Directory(unsigned int _sectors, unsigned int _cluster,
                      unsigned int _bps)
@@ -35,9 +36,11 @@ DirectoryEntry *Directory::findEntry(const char *entryName) {
   return NULL;
 }
 
-DirectoryEntry *Directory::createEntry(const char *name, unsigned int cluster) {
-  DirectoryEntry *newDir = new DirectoryEntry(name, cluster, DIRECTORY);
-
+DirectoryEntry *Directory::createEntry(const char *name, unsigned int cluster,
+                                       byte attributes) {
+  DirectoryEntry *newDir = new DirectoryEntry(name, cluster, attributes);
+  unsigned int res;
+  memcpy(&res, newDir->clusterLow, 2);
   for (int i = 0; i < size; i++) {
     if (!entries[i].isValid()) {
       entries[i] = *newDir;
@@ -46,4 +49,14 @@ DirectoryEntry *Directory::createEntry(const char *name, unsigned int cluster) {
   }
 
   return NULL;
+}
+
+DirectoryEntry *Directory::createSubDir(const char *name,
+                                        unsigned int cluster) {
+  return createEntry(name, cluster, DIRECTORY);
+}
+
+DirectoryEntry *Directory::createFile(const char *name,
+                                      unsigned int firstCluster) {
+  return createEntry(name, firstCluster, ARCHIVE);
 }
