@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstring>
 #include <sstream>
+#include <string>
 #include <vector>
 
 FileSystem::FileSystem(string filename) : currentDirectory(nullptr) {
@@ -99,9 +100,11 @@ bool FileSystem::writeSectors(int lba, int sectors, void *buffer) {
 }
 
 unsigned int FileSystem::getFreeCluster() {
-  for (int i = 0; i < fat.length; i++) {
-    if (fat.table[i] == 0x00) {
-      return i;
+  for (int i = 0; i < fat.length; i += 2) {
+    unsigned short value = (fat.table[i] << 8) | fat.table[i + 1];
+    printf("Value %u, %02x\n", i / 2, value);
+    if (value == 0x00) {
+      return i / 2;
     }
   }
   return -1;
@@ -171,7 +174,8 @@ void FileSystem::makeDir(const char *name) {
       return;
     }
 
-    fat.table[cluster] = 0xf8;
+    // fat.table[cluster] = 0xf8;
+    fat.occupyCluster(cluster);
     Directory *dir = new Directory(bootSector.sectorsPerCluster, cluster,
                                    bytes16ToInt(bootSector.bytesPerSector),
                                    currentDirectory->getCluster());
@@ -192,7 +196,21 @@ void FileSystem::createFile(const char *filename) {
 
   // printf("Archivo %s: %s\n", filename, name.c_str());
   // std::cout << filename << "," << name << "\n";
-  currentDirectory->createFile(name.c_str(), getFreeCluster());
+  DirectoryEntry *newFile =
+      currentDirectory->createFile(name.c_str(), getFreeCluster());
+
+  string input;
+  std::getline(std::cin, input);
+
+  std::cout << "\n" << input << "\n";
+
+  std::cout << "Tamaño del txt es " << input.length() << "\n";
+  fat.occupyCluster(bytes16ToInt(newFile->clusterLow));
+  writeSectors(getClusterSector(currentDirectory->getCluster()),
+               currentDirectory->getSectors(), currentDirectory->entries);
+  writeSectors(fat.startSector, fat.totalSectors, fat.table);
+
+  delete newFile;
   return;
 }
 

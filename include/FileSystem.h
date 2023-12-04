@@ -53,6 +53,14 @@ struct Fat {
         totalSectors(_totalSectors) {
     table = new byte[length];
   }
+
+  void occupyCluster(unsigned int cluster) {
+    unsigned int idx = cluster * 2;
+    printf("Marcando cluster %u como ocupado en fat %u y %u", cluster, idx,
+           idx + 1);
+    table[idx] = 0xff;
+    table[idx + 1] = 0xf8;
+  }
 };
 
 class FileSystem {
