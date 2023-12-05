@@ -19,6 +19,7 @@ FileSystem::FileSystem(string filename) : currentDirectory(nullptr) {
   readBootSector();
   readFat();
   readRootDir();
+  // fat.print();
   // print();
 }
 
@@ -100,11 +101,10 @@ bool FileSystem::writeSectors(int lba, int sectors, void *buffer) {
 }
 
 unsigned int FileSystem::getFreeCluster() {
-  for (int i = 0; i < fat.length; i += 2) {
-    unsigned short value = (fat.table[i] << 8) | fat.table[i + 1];
-    printf("Value %u, %02x\n", i / 2, value);
-    if (value == 0x00) {
-      return i / 2;
+  for (int i = 3; i < fat.size; i++) {
+    // printf("Fat %u: %04x\n", i, fat.get(i));
+    if (fat.get(i) == NOT_ALLOCATED) {
+      return i;
     }
   }
   return -1;
@@ -174,8 +174,7 @@ void FileSystem::makeDir(const char *name) {
       return;
     }
 
-    // fat.table[cluster] = 0xf8;
-    fat.occupyCluster(cluster);
+    fat.set(cluster, EOF_MARK);
     Directory *dir = new Directory(bootSector.sectorsPerCluster, cluster,
                                    bytes16ToInt(bootSector.bytesPerSector),
                                    currentDirectory->getCluster());
@@ -191,11 +190,8 @@ void FileSystem::makeDir(const char *name) {
 }
 
 void FileSystem::createFile(const char *filename) {
-  //
   string name = parseFileName(filename);
 
-  // printf("Archivo %s: %s\n", filename, name.c_str());
-  // std::cout << filename << "," << name << "\n";
   DirectoryEntry *newFile =
       currentDirectory->createFile(name.c_str(), getFreeCluster());
 
@@ -204,8 +200,8 @@ void FileSystem::createFile(const char *filename) {
 
   std::cout << "\n" << input << "\n";
 
-  std::cout << "Tamaño del txt es " << input.length() << "\n";
-  fat.occupyCluster(bytes16ToInt(newFile->clusterLow));
+  // std::cout << "Tamaño del txt es " << input.length() << "\n";
+  fat.set(bytes16ToInt(newFile->clusterLow), EOF_MARK);
   writeSectors(getClusterSector(currentDirectory->getCluster()),
                currentDirectory->getSectors(), currentDirectory->entries);
   writeSectors(fat.startSector, fat.totalSectors, fat.table);
@@ -260,6 +256,7 @@ string FileSystem::parseFileName(string filename) {
     parsedName.append(8 - parsedName.length(), ' ');
   }
   parsedName.append(string(ext));
+  delete[] ext;
   return parsedName;
 }
 

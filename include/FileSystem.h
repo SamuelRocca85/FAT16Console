@@ -35,14 +35,22 @@ struct BootSector {
   byte systemId[8];
 };
 
+enum FatMarks {
+  NOT_ALLOCATED = 0x00,
+  EOF_MARK = 0xffff,
+  BAD_CLUSTER = 0xfff8,
+};
+
 struct Fat {
   byte *table;
-  unsigned int length;
+  unsigned int length; // En bytes
+  unsigned int size;   // En clusters
   unsigned int startSector;
   unsigned int totalSectors;
 
   Fat() {
     length = 0;
+    size = 0;
     startSector = 0;
     totalSectors = 0;
     table = NULL;
@@ -52,14 +60,18 @@ struct Fat {
       : length(_length), startSector(_startSector),
         totalSectors(_totalSectors) {
     table = new byte[length];
+    size = length / 2;
   }
 
-  void occupyCluster(unsigned int cluster) {
+  unsigned short get(unsigned int cluster) {
     unsigned int idx = cluster * 2;
-    printf("Marcando cluster %u como ocupado en fat %u y %u", cluster, idx,
-           idx + 1);
-    table[idx] = 0xff;
-    table[idx + 1] = 0xf8;
+    return (table[idx] << 8) | table[idx + 1];
+  }
+
+  void set(unsigned int cluster, FatMarks mark) {
+    unsigned int idx = cluster * 2;
+    table[idx] = static_cast<unsigned char>(mark >> 8);
+    table[idx + 1] = static_cast<unsigned char>(mark);
   }
 };
 
@@ -83,7 +95,6 @@ public:
 
   unsigned int getFreeCluster();
   unsigned int getClusterSector(unsigned int cluster);
-  // void allocDirectory(unsigned int sectors);
 
   unsigned int bytesToInt(byte *bytes, size_t size);
   unsigned int bytes16ToInt(byte *bytes);
