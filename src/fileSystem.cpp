@@ -9,51 +9,32 @@
 #include <string>
 #include <vector>
 
-FileSystem::FileSystem(string filename) : currentDirectory(nullptr) {
-  file = new fstream(filename, std::ios::in | std::ios::out | std::ios::binary);
-
-  if (!file->is_open()) {
-    std::cerr << "Error al abrir el archivo" << std::endl;
-    exit(1);
-  }
-  readBootSector();
+FileSystem::FileSystem(Disk &_disk) : currentDirectory(nullptr), disk(_disk) {
   readFat();
   readRootDir();
 }
 
 FileSystem::~FileSystem() {
-  file->close();
-  delete file;
   delete currentDirectory;
   delete[] fat.table;
 }
 
-void FileSystem::readBootSector() {
-  file->read(reinterpret_cast<char *>(&bootSector), sizeof(BootSector));
-  if (!file) {
-    std::cerr << "Error al leer desde el archivo" << std::endl;
-    file->close();
-    exit(1);
-  }
-}
-
 void FileSystem::readFat() {
-  unsigned int length = bytes16ToInt(bootSector.sectorsPerFat) *
-                        bytes16ToInt(bootSector.bytesPerSector);
-  fat = Fat(length, bytes16ToInt(bootSector.reservedAreaSectors),
-            bytes16ToInt(bootSector.sectorsPerFat));
+  unsigned int length = bytes16ToInt(disk.bs.sectorsPerFat) *
+                        bytes16ToInt(disk.bs.bytesPerSector);
+  fat = Fat(length, bytes16ToInt(disk.bs.reservedAreaSectors),
+            bytes16ToInt(disk.bs.sectorsPerFat));
 
-  readSectors(fat.startSector, fat.totalSectors, fat.table);
+  disk.readSectors(fat.startSector, fat.totalSectors, fat.table);
 }
 
 void FileSystem::readRootDir() {
-  unsigned int lba =
-      bytes16ToInt(bootSector.reservedAreaSectors) +
-      bytes16ToInt(bootSector.sectorsPerFat) * bootSector.fatCount;
+  unsigned int lba = bytes16ToInt(disk.bs.reservedAreaSectors) +
+                     bytes16ToInt(disk.bs.sectorsPerFat) * disk.bs.fatCount;
   unsigned int size =
-      sizeof(DirectoryEntry) * bytes16ToInt(bootSector.rootEntriesMax);
-  unsigned int sectors = (size / bytes16ToInt(bootSector.bytesPerSector));
-  if (size % bytes16ToInt(bootSector.bytesPerSector) > 0) {
+      sizeof(DirectoryEntry) * bytes16ToInt(disk.bs.rootEntriesMax);
+  unsigned int sectors = (size / bytes16ToInt(disk.bs.bytesPerSector));
+  if (size % bytes16ToInt(disk.bs.bytesPerSector) > 0) {
     sectors++;
   }
   rootDirEnd = lba + sectors;
@@ -63,39 +44,8 @@ void FileSystem::readRootDir() {
   if (currentDirectory != nullptr)
     delete currentDirectory;
   currentDirectory =
-      new Directory(sectors, 0, bytes16ToInt(bootSector.bytesPerSector));
-  readSectors(lba, sectors, currentDirectory->entries);
-}
-
-bool FileSystem::readSectors(int lba, int sectors, void *buffer) {
-  file->seekg(lba * bytes16ToInt(bootSector.bytesPerSector), file->beg);
-
-  unsigned int bytesToRead = sectors * bytes16ToInt(bootSector.bytesPerSector);
-  file->read(reinterpret_cast<char *>(buffer), bytesToRead);
-
-  if (!file) {
-    std::cerr << "Error al leer desde el archivo" << std::endl;
-    file->close();
-    exit(1);
-  }
-
-  return true;
-}
-
-bool FileSystem::writeSectors(int lba, int sectors, void *buffer) {
-  file->seekp(lba * bytes16ToInt(bootSector.bytesPerSector), file->beg);
-
-  unsigned int bytesToWrite = sectors * bytes16ToInt(bootSector.bytesPerSector);
-  // printf("Reading %u bytes...\n", bytesToRead);
-  file->write(reinterpret_cast<char *>(buffer), bytesToWrite);
-
-  if (!file) {
-    std::cerr << "Error al escribir el archivo" << std::endl;
-    file->close();
-    exit(1);
-  }
-
-  return true;
+      new Directory(sectors, 0, bytes16ToInt(disk.bs.bytesPerSector));
+  disk.readSectors(lba, sectors, currentDirectory->entries);
 }
 
 unsigned int FileSystem::getFreeCluster() {
@@ -110,10 +60,10 @@ unsigned int FileSystem::getFreeCluster() {
 
 unsigned int FileSystem::getClusterSector(unsigned int cluster) {
   if (cluster == 0) {
-    return bytes16ToInt(bootSector.reservedAreaSectors) +
-           bytes16ToInt(bootSector.sectorsPerFat) * bootSector.fatCount;
+    return bytes16ToInt(disk.bs.reservedAreaSectors) +
+           bytes16ToInt(disk.bs.sectorsPerFat) * disk.bs.fatCount;
   }
-  return (cluster - 2) * bootSector.sectorsPerCluster + rootDirEnd;
+  return (cluster - 2) * disk.bs.sectorsPerCluster + rootDirEnd;
 }
 
 void FileSystem::listFiles() {
@@ -152,9 +102,9 @@ void FileSystem::changeDir(const char *dirname) {
     if (currentDirectory != nullptr) {
       delete currentDirectory;
     }
-    currentDirectory = new Directory(bootSector.sectorsPerCluster, cluster,
-                                     bytes16ToInt(bootSector.bytesPerSector));
-    readSectors(lba, bootSector.sectorsPerCluster, currentDirectory->entries);
+    currentDirectory = new Directory(disk.bs.sectorsPerCluster, cluster,
+                                     bytes16ToInt(disk.bs.bytesPerSector));
+    disk.readSectors(lba, disk.bs.sectorsPerCluster, currentDirectory->entries);
     changePath(dirname);
   } else {
     printf("directorio %s no existe\n", dirname);
@@ -173,15 +123,16 @@ void FileSystem::makeDir(const char *name) {
     }
 
     fat.set(cluster, EOF_MARK);
-    Directory *dir = new Directory(bootSector.sectorsPerCluster, cluster,
-                                   bytes16ToInt(bootSector.bytesPerSector),
+    Directory *dir = new Directory(disk.bs.sectorsPerCluster, cluster,
+                                   bytes16ToInt(disk.bs.bytesPerSector),
                                    currentDirectory->getCluster());
 
-    writeSectors(getClusterSector(currentDirectory->getCluster()),
-                 currentDirectory->getSectors(), currentDirectory->entries);
-    writeSectors(fat.startSector, fat.totalSectors, fat.table);
-    writeSectors(getClusterSector(dir->getCluster()), dir->getSectors(),
-                 dir->entries);
+    disk.writeSectors(getClusterSector(currentDirectory->getCluster()),
+                      currentDirectory->getSectors(),
+                      currentDirectory->entries);
+    disk.writeSectors(fat.startSector, fat.totalSectors, fat.table);
+    disk.writeSectors(getClusterSector(dir->getCluster()), dir->getSectors(),
+                      dir->entries);
     delete newDir;
     delete dir;
   }
@@ -200,9 +151,9 @@ void FileSystem::createFile(const char *filename) {
 
   // std::cout << "Tamaño del txt es " << input.length() << "\n";
   fat.set(bytes16ToInt(newFile->clusterLow), EOF_MARK);
-  writeSectors(getClusterSector(currentDirectory->getCluster()),
-               currentDirectory->getSectors(), currentDirectory->entries);
-  writeSectors(fat.startSector, fat.totalSectors, fat.table);
+  disk.writeSectors(getClusterSector(currentDirectory->getCluster()),
+                    currentDirectory->getSectors(), currentDirectory->entries);
+  disk.writeSectors(fat.startSector, fat.totalSectors, fat.table);
 
   delete newFile;
   return;
@@ -215,24 +166,6 @@ void FileSystem::catFile(const char *name) {
   if (dirFile != NULL && !dirFile->isDir()) {
     printf("Encontre el archivo %s\n", dirFile->name);
   }
-}
-
-unsigned int FileSystem::bytesToInt(byte *bytes, size_t size) {
-  unsigned int resultado = 0;
-  std::memcpy(&resultado, bytes, size);
-  return resultado;
-}
-
-unsigned int FileSystem::bytes16ToInt(byte *bytes) {
-  return bytesToInt(bytes, 2);
-}
-
-unsigned int FileSystem::bytes32ToInt(byte *bytes) {
-  return bytesToInt(bytes, 4);
-}
-
-string FileSystem::bytesToString(byte *bytes) {
-  return string(reinterpret_cast<char *>(bytes), 11);
 }
 
 string FileSystem::parseFileName(string filename) {
@@ -255,25 +188,6 @@ string FileSystem::parseFileName(string filename) {
   }
   parsedName.append(string(ext));
   delete[] ext;
-  return parsedName;
-}
-
-string FileSystem::prettyFileName(string filename) {
-  string parsedName = "";
-  char *ext = new char[3];
-  // printf("Pretty %s, %u\n", filename.c_str(), filename.length());
-  ext[0] = filename[filename.length() - 3];
-  ext[1] = filename[filename.length() - 2];
-  ext[2] = filename[filename.length() - 1];
-  // ext[3] = '\0';
-  for (int i = 0; i < filename.length(); i++) {
-    if (filename[i] == ' ') {
-      parsedName.append(1, '.');
-      break;
-    }
-    parsedName.append(1, filename[i]);
-  }
-  parsedName.append(string(ext));
   return parsedName;
 }
 
@@ -313,26 +227,25 @@ void FileSystem::returnPath() {
 
 void FileSystem::print() {
   printf("\n--- Boot Sector ---\n");
-  printf("JumpInstruction: %u\n", bytesToInt(bootSector.bootJumpIns, 3));
-  printf("OEM Name: %s\n", bootSector.oemName);
-  printf("Bytes per Sector: %u\n", bytesToInt(bootSector.bytesPerSector, 2));
-  printf("Sectors per Cluster: %u\n", bootSector.sectorsPerCluster);
-  printf("Reserved Area: %u\n", bytesToInt(bootSector.reservedAreaSectors, 2));
-  printf("Fat Count: %u\n", bootSector.fatCount);
-  printf("Max root entries: %u\n", bytesToInt(bootSector.rootEntriesMax, 2));
-  printf("Total Sectors: %u\n", bytesToInt(bootSector.totalSectors, 2));
-  printf("Media Type: %u\n", bootSector.mediaType);
-  printf("Sectors per Fat: %u\n", bytesToInt(bootSector.sectorsPerFat, 2));
-  printf("Sectors Per Track: %u\n", bytesToInt(bootSector.sectorsPerTrack, 2));
-  printf("Heads: %u\n", bytesToInt(bootSector.heads, 2));
-  printf("Hidden Sectors: %u\n", bytesToInt(bootSector.hiddenSectors, 4));
-  printf("Large Sector Count: %u\n",
-         bytesToInt(bootSector.largeSectorCount, 4));
-  printf("Drive Number: %u\n", bootSector.driveNumber);
-  printf("Not used: %u\n", bootSector._notUsed);
-  printf("Signature: %#08x\n", bootSector.signature);
-  printf("Serial Number: %#08x\n", bytesToInt(bootSector.serialNumber, 4));
-  printf("Volume Label: %s\n", bootSector.volumeLabel);
-  printf("FS Type: %s\n", bootSector.systemId);
+  printf("JumpInstruction: %u\n", bytesToInt(disk.bs.bootJumpIns, 3));
+  printf("OEM Name: %s\n", disk.bs.oemName);
+  printf("Bytes per Sector: %u\n", bytesToInt(disk.bs.bytesPerSector, 2));
+  printf("Sectors per Cluster: %u\n", disk.bs.sectorsPerCluster);
+  printf("Reserved Area: %u\n", bytesToInt(disk.bs.reservedAreaSectors, 2));
+  printf("Fat Count: %u\n", disk.bs.fatCount);
+  printf("Max root entries: %u\n", bytesToInt(disk.bs.rootEntriesMax, 2));
+  printf("Total Sectors: %u\n", bytesToInt(disk.bs.totalSectors, 2));
+  printf("Media Type: %u\n", disk.bs.mediaType);
+  printf("Sectors per Fat: %u\n", bytesToInt(disk.bs.sectorsPerFat, 2));
+  printf("Sectors Per Track: %u\n", bytesToInt(disk.bs.sectorsPerTrack, 2));
+  printf("Heads: %u\n", bytesToInt(disk.bs.heads, 2));
+  printf("Hidden Sectors: %u\n", bytesToInt(disk.bs.hiddenSectors, 4));
+  printf("Large Sector Count: %u\n", bytesToInt(disk.bs.largeSectorCount, 4));
+  printf("Drive Number: %u\n", disk.bs.driveNumber);
+  printf("Not used: %u\n", disk.bs._notUsed);
+  printf("Signature: %#08x\n", disk.bs.signature);
+  printf("Serial Number: %#08x\n", bytesToInt(disk.bs.serialNumber, 4));
+  printf("Volume Label: %s\n", disk.bs.volumeLabel);
+  printf("FS Type: %s\n", disk.bs.systemId);
   printf("--- Boot Sector ---\n");
 }

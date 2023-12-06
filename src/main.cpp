@@ -11,7 +11,8 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  FileSystem fs(argv[1]);
+  Disk disk(argv[1]);
+  FileSystem fs(disk);
   Console console(fs);
 
   console.start();

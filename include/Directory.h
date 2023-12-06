@@ -1,11 +1,10 @@
 #pragma once
+#include "Byte.h"
 #include <cstdint>
 #include <cstring>
 #include <ctime>
 #include <iterator>
 #include <string>
-
-typedef unsigned char byte;
 
 using std::string;
 
