@@ -36,15 +36,18 @@ struct DirectoryEntry {
   bool isVolumeLabel() { return (attributes & VOLUME_LABEL) != 0; }
   bool isValid() { return !(name[0] == 0xE5 || name[0] == 0x00); }
 
-  DirectoryEntry(const char *_name, unsigned int _cluster, byte _attributes) {
+  DirectoryEntry(const char *_name, unsigned int _cluster, byte _attributes,
+                 unsigned int _size) {
     byte highEmpty[2] = {0, 0};
     memcpy(name, _name, 11);
     memcpy(clusterLow, &_cluster, 2);
     memcpy(clusterHigh, highEmpty, 2);
+    memcpy(size, &_size, 4);
     attributes = _attributes;
     time_t currTime;
     currTime = time(NULL);
     tm *time = localtime(&currTime);
+
     setDates(time);
     setTimes(time);
   }
@@ -104,7 +107,7 @@ private:
   unsigned int cluster;
 
   DirectoryEntry *createEntry(const char *name, unsigned int cluster,
-                              byte attributes);
+                              byte attributes, unsigned int length);
 
 public:
   DirectoryEntry *entries;
@@ -114,7 +117,8 @@ public:
   ~Directory();
   DirectoryEntry *findEntry(const char *entryName);
   DirectoryEntry *createSubDir(const char *name, unsigned int cluster);
-  DirectoryEntry *createFile(const char *name, unsigned int firstCluster);
+  DirectoryEntry *createFile(const char *name, unsigned int firstCluster,
+                             unsigned int fileLength);
 
   unsigned int getSize() { return size; }
   unsigned int getCluster() { return cluster; }

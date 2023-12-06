@@ -1,9 +1,13 @@
 #pragma once
 #include "Byte.h"
 #include "Disk.h"
+#include "Fat.h"
 
 class Archive {
 private:
+  byte *data;
+
 public:
-  Archive(Disk &disk, byte startCluster[2]);
+  Archive(byte startCluster[2], byte fileSize[4], Disk &disk, Fat &fat,
+          unsigned int rootDirEnd);
 };

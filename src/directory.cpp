@@ -17,8 +17,8 @@ Directory::Directory(unsigned int _sectors, unsigned int _cluster,
   size = totalBytes / sizeof(DirectoryEntry);
   entries = new DirectoryEntry[size];
 
-  DirectoryEntry self(".          ", cluster, DIRECTORY);
-  DirectoryEntry parent("..         ", parentCluster, DIRECTORY);
+  DirectoryEntry self(".          ", cluster, DIRECTORY, 0);
+  DirectoryEntry parent("..         ", parentCluster, DIRECTORY, 0);
 
   entries[0] = self;
   entries[1] = parent;
@@ -37,8 +37,10 @@ DirectoryEntry *Directory::findEntry(const char *entryName) {
 }
 
 DirectoryEntry *Directory::createEntry(const char *name, unsigned int cluster,
-                                       byte attributes) {
-  DirectoryEntry *newDir = new DirectoryEntry(name, cluster, attributes);
+                                       byte attributes,
+                                       unsigned int dirLength) {
+  DirectoryEntry *newDir =
+      new DirectoryEntry(name, cluster, attributes, dirLength);
   unsigned int res;
   memcpy(&res, newDir->clusterLow, 2);
   for (int i = 0; i < size; i++) {
@@ -53,10 +55,11 @@ DirectoryEntry *Directory::createEntry(const char *name, unsigned int cluster,
 
 DirectoryEntry *Directory::createSubDir(const char *name,
                                         unsigned int cluster) {
-  return createEntry(name, cluster, DIRECTORY);
+  return createEntry(name, cluster, DIRECTORY, 0);
 }
 
 DirectoryEntry *Directory::createFile(const char *name,
-                                      unsigned int firstCluster) {
-  return createEntry(name, firstCluster, ARCHIVE);
+                                      unsigned int firstCluster,
+                                      unsigned int fileLength) {
+  return createEntry(name, firstCluster, ARCHIVE, fileLength);
 }

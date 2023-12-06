@@ -1,13 +1,4 @@
 #include "FileSystem.h"
-#include "Directory.h"
-#include <algorithm>
-#include <cctype>
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
-#include <sstream>
-#include <string>
-#include <vector>
 
 FileSystem::FileSystem(Disk &_disk) : currentDirectory(nullptr), disk(_disk) {
   readFat();
@@ -141,19 +132,28 @@ void FileSystem::makeDir(const char *name) {
 void FileSystem::createFile(const char *filename) {
   string name = parseFileName(filename);
 
-  DirectoryEntry *newFile =
-      currentDirectory->createFile(name.c_str(), getFreeCluster());
-
   string input;
   std::getline(std::cin, input);
 
-  std::cout << "\n" << input << "\n";
+  DirectoryEntry *newFile = currentDirectory->createFile(
+      name.c_str(), getFreeCluster(), input.length());
 
-  // std::cout << "Tamaño del txt es " << input.length() << "\n";
+  unsigned int bytesPerCluster =
+      bytes16ToInt(disk.bs.bytesPerSector) * disk.bs.sectorsPerCluster;
+
+  byte *data = new byte[bytesPerCluster];
+
+  for (int i = 0; i < input.length(); i++) {
+    data[i] = input[i];
+  }
+
   fat.set(bytes16ToInt(newFile->clusterLow), EOF_MARK);
+
   disk.writeSectors(getClusterSector(currentDirectory->getCluster()),
                     currentDirectory->getSectors(), currentDirectory->entries);
   disk.writeSectors(fat.startSector, fat.totalSectors, fat.table);
+  disk.writeSectors(getClusterSector(bytes16ToInt(newFile->clusterLow)),
+                    disk.bs.sectorsPerCluster, data);
 
   delete newFile;
   return;
@@ -163,9 +163,11 @@ void FileSystem::catFile(const char *name) {
   DirectoryEntry *dirFile =
       currentDirectory->findEntry(parseFileName(name).c_str());
 
-  if (dirFile != NULL && !dirFile->isDir()) {
-    printf("Encontre el archivo %s\n", dirFile->name);
+  if (dirFile == NULL || dirFile->isDir()) {
+    printf("El archivo %s no existe\n", parseFileName(name).c_str());
+    return;
   }
+  Archive archivo(dirFile->clusterLow, dirFile->size, disk, fat, rootDirEnd);
 }
 
 string FileSystem::parseFileName(string filename) {
