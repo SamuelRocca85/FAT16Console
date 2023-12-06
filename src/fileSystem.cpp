@@ -19,8 +19,6 @@ FileSystem::FileSystem(string filename) : currentDirectory(nullptr) {
   readBootSector();
   readFat();
   readRootDir();
-  // fat.print();
-  // print();
 }
 
 FileSystem::~FileSystem() {

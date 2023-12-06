@@ -35,7 +35,7 @@ struct BootSector {
   byte systemId[8];
 };
 
-enum FatMarks {
+enum FatMark {
   NOT_ALLOCATED = 0x00,
   EOF_MARK = 0xffff,
   BAD_CLUSTER = 0xfff8,
@@ -68,7 +68,7 @@ struct Fat {
     return (table[idx] << 8) | table[idx + 1];
   }
 
-  void set(unsigned int cluster, FatMarks mark) {
+  void set(unsigned int cluster, FatMark mark) {
     unsigned int idx = cluster * 2;
     table[idx] = static_cast<unsigned char>(mark >> 8);
     table[idx + 1] = static_cast<unsigned char>(mark);
