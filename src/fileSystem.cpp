@@ -1,4 +1,8 @@
 #include "FileSystem.h"
+#include "Byte.h"
+#include "Fat.h"
+#include <cstdio>
+#include <cstring>
 
 FileSystem::FileSystem(Disk &_disk) : currentDirectory(nullptr), disk(_disk) {
   readFat();
@@ -141,21 +145,40 @@ void FileSystem::createFile(const char *filename) {
   unsigned int bytesPerCluster =
       bytes16ToInt(disk.bs.bytesPerSector) * disk.bs.sectorsPerCluster;
 
-  byte *data = new byte[bytesPerCluster];
+  unsigned int clusterCount = input.length() / bytesPerCluster;
 
-  for (int i = 0; i < input.length(); i++) {
-    data[i] = input[i];
+  if (input.length() % bytesPerCluster) {
+    clusterCount++;
   }
 
-  fat.set(bytes16ToInt(newFile->clusterLow), EOF_MARK);
+  unsigned int cluster = bytes16ToInt(newFile->clusterLow);
+
+  for (int i = 0; i < clusterCount; i++) {
+    int startByte = i * bytesPerCluster;
+    string clusterChunk = input.substr(startByte, bytesPerCluster);
+
+    byte *data = const_cast<unsigned char *>(
+        reinterpret_cast<const byte *>(clusterChunk.c_str()));
+
+    printf("Data: %s\n", data);
+
+    disk.writeSectors(getClusterSector(cluster), disk.bs.sectorsPerCluster,
+                      data);
+
+    fat.set(cluster, EOF_MARK);
+    unsigned int nextCluster =
+        i == (clusterCount - 1) ? 0xfff8 : getFreeCluster();
+    printf("Marcando cluster %04x: %04x\n", cluster, nextCluster);
+    fat.set(cluster, nextCluster);
+    cluster = nextCluster;
+  }
 
   disk.writeSectors(getClusterSector(currentDirectory->getCluster()),
                     currentDirectory->getSectors(), currentDirectory->entries);
   disk.writeSectors(fat.startSector, fat.totalSectors, fat.table);
-  disk.writeSectors(getClusterSector(bytes16ToInt(newFile->clusterLow)),
-                    disk.bs.sectorsPerCluster, data);
 
   delete newFile;
+  // delete[] data;
   return;
 }
 
