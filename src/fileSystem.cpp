@@ -33,7 +33,7 @@ void FileSystem::readRootDir() {
     sectors++;
   }
   rootDirEnd = lba + sectors;
-  printf("%u, %u\n", lba, rootDirEnd);
+  // printf("%u, %u\n", lba, rootDirEnd);
   currentPath = "/";
   // allocDirectory(sectors);
   if (currentDirectory != nullptr)
@@ -145,6 +145,7 @@ void FileSystem::createFile(const char *filename) {
   unsigned int bytesPerCluster =
       bytes16ToInt(disk.bs.bytesPerSector) * disk.bs.sectorsPerCluster;
 
+  // printf("Length: %u\n", input.length());
   unsigned int clusterCount = input.length() / bytesPerCluster;
 
   if (input.length() % bytesPerCluster) {
@@ -152,24 +153,25 @@ void FileSystem::createFile(const char *filename) {
   }
 
   unsigned int cluster = bytes16ToInt(newFile->clusterLow);
-
+  // printf("Cluster count: %u\n", clusterCount);
   for (int i = 0; i < clusterCount; i++) {
     int startByte = i * bytesPerCluster;
     string clusterChunk = input.substr(startByte, bytesPerCluster);
 
-    byte *data = const_cast<unsigned char *>(
+    byte *data = const_cast<byte *>(
         reinterpret_cast<const byte *>(clusterChunk.c_str()));
 
-    printf("Data: %s\n", data);
+    // printf("Data: %s\n", data);
 
     disk.writeSectors(getClusterSector(cluster), disk.bs.sectorsPerCluster,
                       data);
 
     fat.set(cluster, EOF_MARK);
     unsigned int nextCluster =
-        i == (clusterCount - 1) ? 0xfff8 : getFreeCluster();
-    printf("Marcando cluster %04x: %04x\n", cluster, nextCluster);
+        i == (clusterCount - 1) ? EOF_MARK : getFreeCluster();
+    // printf("Marcando cluster %04x: %04x\n", cluster, nextCluster);
     fat.set(cluster, nextCluster);
+    // printf("Valor del cluster %02x: %02x\n", cluster, fat.get(cluster));
     cluster = nextCluster;
   }
 

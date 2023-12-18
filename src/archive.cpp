@@ -8,6 +8,7 @@ Archive::Archive(byte startCluster[2], byte fileSize[4], Disk &disk, Fat &fat,
     : data(NULL) {
   unsigned int currentCluster = bytes16ToInt(startCluster);
   unsigned int size = bytes32ToInt(fileSize);
+  // printf("Size: %u\n", size);
   unsigned int bytesPerCluster =
       bytes16ToInt(disk.bs.bytesPerSector) * disk.bs.sectorsPerCluster;
 
@@ -22,6 +23,7 @@ Archive::Archive(byte startCluster[2], byte fileSize[4], Disk &disk, Fat &fat,
     unsigned int firstSector =
         (currentCluster - 2) * disk.bs.sectorsPerCluster + rootDirEnd;
 
+    // printf("Leyendo %u: %u\n", currentCluster, fat.get(currentCluster));
     disk.readSectors(firstSector, disk.bs.sectorsPerCluster, firstClusterData);
 
     for (int j = 0; j < bytesPerCluster; j++) {
@@ -35,7 +37,7 @@ Archive::Archive(byte startCluster[2], byte fileSize[4], Disk &disk, Fat &fat,
     }
     currentCluster = fat.get(currentCluster);
   }
+  printf("\n\n");
 
-  printf("\n");
   delete[] firstClusterData;
 }

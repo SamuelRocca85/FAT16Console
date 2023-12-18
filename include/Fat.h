@@ -36,7 +36,7 @@ struct Fat {
 
   void set(unsigned int cluster, int mark) {
     unsigned int idx = cluster * 2;
-    table[idx] = static_cast<unsigned char>(mark >> 8);
-    table[idx + 1] = static_cast<unsigned char>(mark);
+    table[idx] = static_cast<byte>(mark >> 8);
+    table[idx + 1] = static_cast<byte>(mark);
   }
 };
