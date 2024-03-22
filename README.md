@@ -44,5 +44,5 @@ El programa mostrara una consola donde se pueden ingresar los siguientes comando
 cat > [file]|Crea un archivo con nombre [file] y espera el input para escribir en el archivo|cat > test.txt|
 cat [file]|Muestra el contenido del archivo [file]|cat test.txt|
 
-[!IMPORTANT]  
-Los nombres de los directorios en el comando mkdir deben ingresarse con mayusculas sin espacios
+> [!NOTE]  
+> Los nombres de los directorios en el comando mkdir deben ingresarse con mayusculas sin espacios
